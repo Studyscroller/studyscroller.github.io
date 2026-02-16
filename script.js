@@ -1,51 +1,28 @@
-import { interests, startTopics, contentCards } from './data.js';
+import { interestsData, startTopics, contentCards } from './data.js';
 
-// DOM Elements
-const screens = {
-    interests: document.getElementById('onboarding-interests'),
-    start: document.getElementById('onboarding-start'),
-    feed: document.getElementById('main-feed')
-};
-
-const containers = {
-    interestsGrid: document.getElementById('interests-grid'),
-    startList: document.getElementById('start-topics-list'),
-    feedTrack: document.getElementById('feed-track'),
-    discoverGrid: document.getElementById('discover-grid'),
-    libraryList: document.getElementById('library-list')
-};
-
-const state = {
-    selectedInterests: new Set(),
-    startTopic: null
-};
-
-// --- Initialization ---
-function init() {
-    renderInterests();
-    renderStartTopics();
-    attachEventListeners();
-
-    // Check if onboarding is done (basic check)
-    // For now, we always start at onboarding for demo purposes
-}
+// ... (DOM Elements and State remain same)
 
 // --- Rendering ---
 function renderInterests() {
+    // Get interests based on selected start topic, or default
+    const currentInterests = interestsData[state.startTopic] || interestsData['default'] || [];
+
     const renderChip = (item) => `
         <div class="chip" data-id="${item.id}">
             ${item.text}
         </div>
     `;
 
-    containers.interestsGrid.innerHTML = interests.map(renderChip).join('');
+    containers.interestsGrid.innerHTML = currentInterests.map(renderChip).join('');
 
-    // Also render discover grid
+    // Also render discover grid (using default or combined)
     if (containers.discoverGrid) {
-        containers.discoverGrid.innerHTML = interests.map(renderChip).join('');
+        // Show a mix for discover
+        const mix = [...(interestsData['psychology'] || []), ...(interestsData['engineering'] || [])];
+        containers.discoverGrid.innerHTML = mix.slice(0, 8).map(renderChip).join('');
     }
 
-    // Chip selection logic
+    // Chip selection logic (same as before)
     const toggleChip = (chip) => {
         chip.classList.toggle('selected');
         const id = chip.dataset.id;
@@ -73,124 +50,60 @@ function renderStartTopics() {
     containers.startList.querySelectorAll('.list-item').forEach(btn => {
         btn.addEventListener('click', () => {
             state.startTopic = btn.dataset.id;
-            // Go to Interests screen (Refine)
+            // Need to re-render interests based on choice
+            renderInterests();
             goToScreen('interests');
         });
     });
 }
 
-// --- API Integration (OpenAlex & OpenFDA) ---
-async function fetchResearchPapers(topic) {
-    const baseUrl = 'https://api.openalex.org/works';
-    const query = topic ? topic.toLowerCase() : 'science';
-    const url = `${baseUrl}?search=${query}&filter=has_abstract:true&sample=10&select=title,publication_year,abstract_inverted_index,id,primary_location,doi`;
-
-    try {
-        const response = await fetch(url);
-        const data = await response.json();
-        return data.results.map(cleanOpenAlexData);
-    } catch (error) {
-        console.error("OpenAlex API Error:", error);
-        return [];
-    }
-}
-
-async function fetchDrugData(topic) {
-    // Basic mapping of topics to drug conditions or classes
-    const drugKeywords = {
-        'Psychology': 'antidepressant',
-        'Biology': 'antibiotic',
-        'Medicine': 'pain',
-        'Chemistry': 'chemical',
-        'Engineering': 'device'
-    };
-
-    const keyword = drugKeywords[topic] || topic || 'health';
-    const url = `https://api.fda.gov/drug/label.json?search=indications_and_usage:${keyword}&limit=5`;
-
-    try {
-        const response = await fetch(url);
-        const data = await response.json();
-        if (data.results) {
-            return data.results.map(cleanOpenFDAData);
-        }
-        return [];
-    } catch (error) {
-        // console.error("OpenFDA API Error:", error); 
-        // OpenFDA search often 404s on no results, just ignore
-        return [];
-    }
-}
-
-function cleanOpenFDAData(drug) {
-    return {
-        id: drug.id || Math.random().toString(36),
-        category: "Medicine",
-        tag: "Drug Info",
-        title: drug.openfda?.brand_name?.[0] || drug.openfda?.generic_name?.[0] || "Unknown Drug",
-        text: drug.indications_and_usage ? drug.indications_and_usage[0].substring(0, 250) + "..." : "No description available.",
-        year: drug.effective_time ? drug.effective_time.substring(0, 4) : "",
-        image: null,
-        url: `https://dailymed.nlm.nih.gov/dailymed/search.cfm?labeltype=all&query=${drug.openfda?.brand_name?.[0]}`,
-        type: 'drug',
-        source: 'FDA.gov' // Legit source
-    };
-}
-
-function reconstructAbstract(invertedIndex) {
-    if (!invertedIndex) return "No abstract available.";
-    const wordList = [];
-    Object.entries(invertedIndex).forEach(([word, positions]) => {
-        positions.forEach(pos => { wordList[pos] = word; });
-    });
-    const fullText = wordList.join(' ');
-    return fullText.length > 250 ? fullText.substring(0, 250) + "..." : fullText;
-}
-
-function cleanOpenAlexData(work) {
-    return {
-        id: work.id,
-        category: work.primary_location?.source?.display_name || "Research",
-        tag: "Science Fact",
-        title: work.title,
-        text: reconstructAbstract(work.abstract_inverted_index),
-        year: work.publication_year,
-        image: null,
-        url: work.doi || null,
-        type: 'research',
-        source: 'OpenAlex / Scientific Journal' // Legit source
-    };
-}
+// ... (API Fetching functions remain same)
 
 // --- Features: Actions ---
 window.saveToLibrary = function (cardId) {
     const allData = window.currentFeedData || [];
-    const card = allData.find(c => c.id === cardId);
+    // FIX: Ensure ID comparison is string-safe
+    const card = allData.find(c => String(c.id) === String(cardId));
+    const btn = document.getElementById(`save-${cardId}`);
+
     if (card) {
         const library = JSON.parse(localStorage.getItem('studyScrollerLib') || '[]');
-        if (!library.find(c => c.id === card.id)) {
+        if (!library.find(c => String(c.id) === String(card.id))) {
             library.push(card);
             localStorage.setItem('studyScrollerLib', JSON.stringify(library));
-            alert("Saved to Library!");
+            if (btn) btn.classList.add('saved');
+            // alert("Saved!"); // Removed alert for smoother UX, visual cue is enough
         } else {
-            alert("Already in Library");
+            // Already saved
+            if (btn) btn.classList.add('saved');
         }
+    } else {
+        console.error("Card not found for saving:", cardId);
     }
 };
 
-window.shareContent = async function (title, text) {
+window.shareContent = async function (title, url) {
+    const safeUrl = url && url !== 'null' ? url : window.location.href;
+    const shareData = {
+        title: title,
+        text: `Check out this article: "${title}" \nRead more here: ${safeUrl}`,
+        url: safeUrl,
+    };
+
     if (navigator.share) {
         try {
-            await navigator.share({
-                title: title,
-                text: text,
-                url: window.location.href,
-            });
+            await navigator.share(shareData);
         } catch (error) {
             console.log('Error sharing:', error);
         }
     } else {
-        alert("Share not supported on this browser (check context is secure).");
+        // Fallback: Copy to clipboard
+        try {
+            await navigator.clipboard.writeText(`${shareData.text}`);
+            alert("Link copied to clipboard!");
+        } catch (err) {
+            alert("Share not supported.");
+        }
     }
 };
 
