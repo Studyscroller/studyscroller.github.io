@@ -1,4 +1,4 @@
-import { interestsData, startTopics, contentCards } from './data.js';
+import { interestsData, startTopics, contentCards } from './appData.js';
 
 // ... (DOM Elements and State remain same)
 
@@ -191,7 +191,7 @@ async function renderFeed() {
                 <div class="card-actions">
                     <button class="action-btn" onclick="saveToLibrary('${card.id}')" title="Save to Library">🔖</button>
                     <button class="action-btn" onclick="openLink('${card.url}')" title="Read Full Paper">📖</button>
-                    <button class="action-btn" onclick="shareContent('${card.title ? card.title.replace(/'/g, "") : "StudyScroller"}', 'Check this out!')" title="Share">📤</button>
+                    <button class="action-btn" onclick="shareContent('${card.title ? card.title.replace(/'/g, "") : "StudyScroller"}', '${card.url}')" title="Share">📤</button>
                 </div>
             </div>
         </article>
