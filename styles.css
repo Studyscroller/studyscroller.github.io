@@ -21,6 +21,8 @@ body {
     font-family: 'Inter', sans-serif;
     color: var(--text);
     height: 100vh;
+    height: 100dvh;
+    /* Mobile viewport fix */
     overflow: hidden;
     display: flex;
     justify-content: center;
@@ -270,6 +272,7 @@ body {
 .bottom-action {
     position: absolute;
     bottom: 0;
+    padding-bottom: max(20px, env(safe-area-inset-bottom));
     left: 0;
     right: 0;
     padding: 20px 30px;
