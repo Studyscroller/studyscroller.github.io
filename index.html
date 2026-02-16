@@ -18,10 +18,9 @@
         <!-- Desktop Sidebar -->
         <nav class="desktop-nav">
             <h1>StudyScroller</h1>
-            <button class="nav-btn active"><span>🏠</span> Home</button>
-            <button class="nav-btn"><span>🔍</span> Discover</button>
-            <button class="nav-btn"><span>🔖</span> Library</button>
-            <button class="nav-btn"><span>👤</span> Profile</button>
+            <button class="nav-btn" onclick="switchTab('home')"><span>🏠</span> Home</button>
+            <button class="nav-btn" onclick="switchTab('discover')"><span>🔍</span> Discover</button>
+            <button class="nav-btn" onclick="switchTab('library')"><span>🔖</span> Library</button>
         </nav>
 
         <div class="content-area">
@@ -29,7 +28,7 @@
             <section id="onboarding-interests" class="screen active">
                 <header class="onboarding-header">
                     <div class="progress-bar">
-                        <div class="fill" style="width: 33%"></div>
+                        <div class="fill" style="width: 50%"></div>
                     </div>
                     <button class="back-btn" onclick="history.back()">← Back</button>
                     <h1>Which topics interest you?</h1>
@@ -46,7 +45,7 @@
             <section id="onboarding-start" class="screen">
                 <header class="onboarding-header">
                     <div class="progress-bar">
-                        <div class="fill" style="width: 66%"></div>
+                        <div class="fill" style="width: 100%"></div>
                     </div>
                     <button class="back-btn" id="btn-back-2">← Back</button>
                     <h1>Pick a starting point</h1>
@@ -56,34 +55,44 @@
                 </div>
             </section>
 
-            <!-- Onboarding Screen 3: Age -->
-            <section id="onboarding-age" class="screen">
-                <header class="onboarding-header">
-                    <div class="progress-bar">
-                        <div class="fill" style="width: 100%"></div>
-                    </div>
-                    <button class="back-btn" id="btn-back-3">← Back</button>
-                    <h1>Select your age</h1>
-                    <p style="color: rgba(255,255,255,0.7); margin-top: 10px;">To tailor the complexity.</p>
-                </header>
-                <div class="list-container" id="age-list">
-                    <button class="list-item" data-age="18-24">18 — 24</button>
-                    <button class="list-item" data-age="25-34">25 — 34</button>
-                    <button class="list-item" data-age="35-44">35 — 44</button>
-                    <button class="list-item" data-age="45-54">45 — 54</button>
-                    <button class="list-item" data-age="55+">55 & older</button>
-                </div>
-            </section>
-
-            <!-- Main Feed -->
+            <!-- Main Feed (Home) -->
             <section id="main-feed" class="screen">
                 <div class="feed-container" id="feed-track">
                     <!-- Cards injected here -->
                 </div>
                 <nav class="bottom-nav">
-                    <button class="nav-item active">🏠</button>
-                    <button class="nav-item">🔍</button>
-                    <button class="nav-item">👤</button>
+                    <button class="nav-item active" onclick="switchTab('home')">🏠</button>
+                    <button class="nav-item" onclick="switchTab('discover')">🔍</button>
+                    <button class="nav-item" onclick="switchTab('library')">🔖</button>
+                </nav>
+            </section>
+
+            <!-- Discover Section (New) -->
+            <section id="section-discover" class="screen" style="padding-top: 20px; text-align: center; display: none;">
+                <div style="padding: 20px;">
+                    <h2>Discover New Topics</h2>
+                    <p style="opacity: 0.7; margin-bottom: 20px;">Explore tags to add to your feed.</p>
+                    <div class="chips-container" id="discover-grid" style="justify-content: center;"></div>
+                </div>
+                <nav class="bottom-nav">
+                    <button class="nav-item" onclick="switchTab('home')">🏠</button>
+                    <button class="nav-item active" onclick="switchTab('discover')">🔍</button>
+                    <button class="nav-item" onclick="switchTab('library')">🔖</button>
+                </nav>
+            </section>
+
+            <!-- Library Section (New) -->
+            <section id="section-library" class="screen" style="padding-top: 20px; text-align: center; display: none;">
+                <div style="padding: 20px;">
+                    <h2>Your Saved Items</h2>
+                    <div class="list-container" id="library-list" style="margin-top: 20px;">
+                        <p style="color: #888;">No saved items yet.</p>
+                    </div>
+                </div>
+                <nav class="bottom-nav">
+                    <button class="nav-item" onclick="switchTab('home')">🏠</button>
+                    <button class="nav-item" onclick="switchTab('discover')">🔍</button>
+                    <button class="nav-item active" onclick="switchTab('library')">🔖</button>
                 </nav>
             </section>
         </div>

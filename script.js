@@ -4,21 +4,20 @@ import { interests, startTopics, contentCards } from './data.js';
 const screens = {
     interests: document.getElementById('onboarding-interests'),
     start: document.getElementById('onboarding-start'),
-    age: document.getElementById('onboarding-age'),
     feed: document.getElementById('main-feed')
 };
 
 const containers = {
     interestsGrid: document.getElementById('interests-grid'),
     startList: document.getElementById('start-topics-list'),
-    ageList: document.getElementById('age-list'),
-    feedTrack: document.getElementById('feed-track')
+    feedTrack: document.getElementById('feed-track'),
+    discoverGrid: document.getElementById('discover-grid'),
+    libraryList: document.getElementById('library-list')
 };
 
 const state = {
     selectedInterests: new Set(),
-    startTopic: null,
-    age: null
+    startTopic: null
 };
 
 // --- Initialization ---
@@ -26,27 +25,39 @@ function init() {
     renderInterests();
     renderStartTopics();
     attachEventListeners();
+
+    // Check if onboarding is done (basic check)
+    // For now, we always start at onboarding for demo purposes
 }
 
 // --- Rendering ---
 function renderInterests() {
-    containers.interestsGrid.innerHTML = interests.map(item => `
+    const renderChip = (item) => `
         <div class="chip" data-id="${item.id}">
             ${item.text}
         </div>
-    `).join('');
+    `;
+
+    containers.interestsGrid.innerHTML = interests.map(renderChip).join('');
+
+    // Also render discover grid
+    if (containers.discoverGrid) {
+        containers.discoverGrid.innerHTML = interests.map(renderChip).join('');
+    }
 
     // Chip selection logic
+    const toggleChip = (chip) => {
+        chip.classList.toggle('selected');
+        const id = chip.dataset.id;
+        if (state.selectedInterests.has(id)) {
+            state.selectedInterests.delete(id);
+        } else {
+            state.selectedInterests.add(id);
+        }
+    };
+
     containers.interestsGrid.querySelectorAll('.chip').forEach(chip => {
-        chip.addEventListener('click', () => {
-            chip.classList.toggle('selected');
-            const id = chip.dataset.id;
-            if (state.selectedInterests.has(id)) {
-                state.selectedInterests.delete(id);
-            } else {
-                state.selectedInterests.add(id);
-            }
-        });
+        chip.addEventListener('click', () => toggleChip(chip));
     });
 }
 
@@ -62,47 +73,77 @@ function renderStartTopics() {
     containers.startList.querySelectorAll('.list-item').forEach(btn => {
         btn.addEventListener('click', () => {
             state.startTopic = btn.dataset.id;
-            goToScreen('age');
+            // SKIP AGE SCREEN -> Go direct to feed
+            goToScreen('feed');
         });
     });
 }
 
-// --- API Integration (OpenAlex) ---
+// --- API Integration (OpenAlex & OpenFDA) ---
 async function fetchResearchPapers(topic) {
     const baseUrl = 'https://api.openalex.org/works';
     const query = topic ? topic.toLowerCase() : 'science';
-
-    // We search for works with the specific concept/topic in title or abstract
-    // filter=has_abstract:true ensures we get content to show
-    const url = `${baseUrl}?search=${query}&filter=has_abstract:true&sample=20&select=title,publication_year,abstract_inverted_index,id,primary_location,authorships`;
+    const url = `${baseUrl}?search=${query}&filter=has_abstract:true&sample=10&select=title,publication_year,abstract_inverted_index,id,primary_location,doi`;
 
     try {
         const response = await fetch(url);
         const data = await response.json();
         return data.results.map(cleanOpenAlexData);
     } catch (error) {
-        console.error("API Error:", error);
-        return []; // Fallback to empty if fails
+        console.error("OpenAlex API Error:", error);
+        return [];
     }
 }
 
-// Helper to reconstruct abstract from inverted index
+async function fetchDrugData(topic) {
+    // Basic mapping of topics to drug conditions or classes
+    const drugKeywords = {
+        'Psychology': 'antidepressant',
+        'Biology': 'antibiotic',
+        'Medicine': 'pain',
+        'Chemistry': 'chemical',
+        'Engineering': 'device'
+    };
+
+    const keyword = drugKeywords[topic] || topic || 'health';
+    const url = `https://api.fda.gov/drug/label.json?search=indications_and_usage:${keyword}&limit=5`;
+
+    try {
+        const response = await fetch(url);
+        const data = await response.json();
+        if (data.results) {
+            return data.results.map(cleanOpenFDAData);
+        }
+        return [];
+    } catch (error) {
+        // console.error("OpenFDA API Error:", error); 
+        // OpenFDA search often 404s on no results, just ignore
+        return [];
+    }
+}
+
+function cleanOpenFDAData(drug) {
+    return {
+        id: drug.id || Math.random().toString(36),
+        category: "Medicine",
+        tag: "Drug Info",
+        title: drug.openfda?.brand_name?.[0] || drug.openfda?.generic_name?.[0] || "Unknown Drug",
+        text: drug.indications_and_usage ? drug.indications_and_usage[0].substring(0, 250) + "..." : "No description available.",
+        year: drug.effective_time ? drug.effective_time.substring(0, 4) : "",
+        image: null,
+        url: `https://dailymed.nlm.nih.gov/dailymed/search.cfm?labeltype=all&query=${drug.openfda?.brand_name?.[0]}`,
+        type: 'drug'
+    };
+}
+
 function reconstructAbstract(invertedIndex) {
     if (!invertedIndex) return "No abstract available.";
-
     const wordList = [];
     Object.entries(invertedIndex).forEach(([word, positions]) => {
-        positions.forEach(pos => {
-            wordList[pos] = word;
-        });
+        positions.forEach(pos => { wordList[pos] = word; });
     });
-
-    // Truncate to first 300 chars for the card
     const fullText = wordList.join(' ');
-    if (fullText.length > 250) {
-        return fullText.substring(0, 250) + "...";
-    }
-    return fullText;
+    return fullText.length > 250 ? fullText.substring(0, 250) + "..." : fullText;
 }
 
 function cleanOpenAlexData(work) {
@@ -113,22 +154,109 @@ function cleanOpenAlexData(work) {
         title: work.title,
         text: reconstructAbstract(work.abstract_inverted_index),
         year: work.publication_year,
-        // OpenAlex doesn't always provide images, so we use abstract gradients/patterns or a placeholder
-        image: null
+        image: null,
+        url: work.doi || null,
+        type: 'research'
     };
 }
 
+// --- Features: Actions ---
+window.saveToLibrary = function (cardId) {
+    const allData = window.currentFeedData || [];
+    const card = allData.find(c => c.id === cardId);
+    if (card) {
+        const library = JSON.parse(localStorage.getItem('studyScrollerLib') || '[]');
+        if (!library.find(c => c.id === card.id)) {
+            library.push(card);
+            localStorage.setItem('studyScrollerLib', JSON.stringify(library));
+            alert("Saved to Library!");
+        } else {
+            alert("Already in Library");
+        }
+    }
+};
+
+window.shareContent = async function (title, text) {
+    if (navigator.share) {
+        try {
+            await navigator.share({
+                title: title,
+                text: text,
+                url: window.location.href,
+            });
+        } catch (error) {
+            console.log('Error sharing:', error);
+        }
+    } else {
+        alert("Share not supported on this browser (check context is secure).");
+    }
+};
+
+window.openLink = function (url) {
+    if (url && url !== 'null') window.open(url, '_blank');
+    else alert("No external link available for this item.");
+};
+
+window.switchTab = function (tabName) {
+    // Hide all main sections
+    document.getElementById('main-feed').style.display = 'none';
+    document.getElementById('section-discover').style.display = 'none';
+    document.getElementById('section-library').style.display = 'none';
+
+    // Show active
+    if (tabName === 'home') document.getElementById('main-feed').style.display = 'block';
+    if (tabName === 'discover') {
+        document.getElementById('section-discover').style.display = 'block';
+    }
+    if (tabName === 'library') {
+        document.getElementById('section-library').style.display = 'block';
+        renderLibrary();
+    }
+};
+
+function renderLibrary() {
+    const libList = document.getElementById('library-list');
+    const library = JSON.parse(localStorage.getItem('studyScrollerLib') || '[]');
+    if (library.length === 0) {
+        libList.innerHTML = '<p style="color:#aaa">No saved items.</p>';
+        return;
+    }
+    libList.innerHTML = library.map(c => `
+        <div class="list-item" onclick="openLink('${c.url}')">
+            <div>
+                <div style="font-weight:bold; font-size:14px">${c.title}</div>
+                <div style="font-size:12px; opacity:0.7">${c.tag}</div>
+            </div>
+            <button style="background:none; border:none; color:white;">→</button>
+        </div>
+    `).join('');
+}
+
+
 // --- Feed Logic ---
+window.currentFeedData = [];
+
 async function renderFeed() {
-    containers.feedTrack.innerHTML = '<div style="display:flex;justify-content:center;align-items:center;height:100%;color:white;">Scanning global research database...</div>';
+    containers.feedTrack.innerHTML = '<div style="display:flex;justify-content:center;align-items:center;height:100%;color:white;">Scanning global databases...</div>';
 
-    // FETCH REAL DATA
-    const apiData = await fetchResearchPapers(state.startTopic);
+    // FETCH REAL DATA PARALLEL
+    const [papers, drugs] = await Promise.all([
+        fetchResearchPapers(state.startTopic),
+        fetchDrugData(state.startTopic)
+    ]);
 
-    // Mix with local data if API returns few results, or just use API
-    const displayData = apiData.length > 0 ? apiData : contentCards;
+    // Interleave data
+    const mixedData = [];
+    const maxLength = Math.max(papers.length, drugs.length);
+    for (let i = 0; i < maxLength; i++) {
+        if (papers[i]) mixedData.push(papers[i]);
+        if (drugs[i]) mixedData.push(drugs[i]);
+    }
 
-    containers.feedTrack.innerHTML = displayData.map((card, index) => {
+    // Fallback
+    window.currentFeedData = mixedData.length > 0 ? mixedData : contentCards;
+
+    containers.feedTrack.innerHTML = window.currentFeedData.map((card) => {
         const bgStyle = card.image
             ? `background-image: url('${card.image}'); background-size: cover;`
             : `background: linear-gradient(${Math.random() * 360}deg, #2d3436, #000000);`;
@@ -138,7 +266,7 @@ async function renderFeed() {
             <!-- Glass Card Content -->
             <div class="card-glass">
                 <div class="card-meta">
-                    <span class="card-tag">${card.category.substring(0, 20)}</span>
+                    <span class="card-tag">${card.tag || 'Info'}</span>
                     <span class="card-year">${card.year || ''}</span>
                 </div>
                 
@@ -146,28 +274,29 @@ async function renderFeed() {
                 <p class="card-abstract">${card.text}</p>
                 
                 <div class="card-actions">
-                    <button class="action-btn" title="Save to Library">🔖</button>
-                    <button class="action-btn" title="Read Full Paper">📖</button>
-                    <button class="action-btn" title="Share">📤</button>
+                    <button class="action-btn" onclick="saveToLibrary('${card.id}')" title="Save to Library">🔖</button>
+                    <button class="action-btn" onclick="openLink('${card.url}')" title="Read Full Paper">📖</button>
+                    <button class="action-btn" onclick="shareContent('${card.title ? card.title.replace(/'/g, "") : "StudyScroller"}', 'Check this out!')" title="Share">📤</button>
                 </div>
             </div>
         </article>
     `}).join('');
 
-    // Scroll to top
     containers.feedTrack.scrollTop = 0;
 }
 
 // --- Navigation ---
 function goToScreen(screenName) {
     const current = document.querySelector('.screen.active');
-    const next = screens[screenName];
+    const next = screens[screenName] || document.getElementById('main-feed');
 
-    if (current && next) {
+    if (current) {
         current.classList.remove('active');
         current.classList.add('prev');
+    }
 
-        next.classList.remove('next');
+    if (next) {
+        next.classList.remove('next'); // ensure clean state
         next.classList.add('active');
     }
 
@@ -185,31 +314,12 @@ function attachEventListeners() {
 
     // Back Buttons (Simulated for single page feeling)
     document.getElementById('btn-back-2').addEventListener('click', () => {
-        navigateBack('interests');
+        const current = document.querySelector('.screen.active');
+        const prev = screens['interests'];
+        current.classList.remove('active');
+        prev.classList.remove('prev');
+        prev.classList.add('active');
     });
-
-    document.getElementById('btn-back-3').addEventListener('click', () => {
-        navigateBack('start');
-    });
-
-    // Age Selection
-    containers.ageList.querySelectorAll('.list-item').forEach(btn => {
-        btn.addEventListener('click', () => {
-            state.age = btn.dataset.age;
-            goToScreen('feed');
-        });
-    });
-}
-
-function navigateBack(targetScreen) {
-    const current = document.querySelector('.screen.active');
-    const target = screens[targetScreen];
-
-    current.classList.remove('active');
-    current.classList.add('next');
-
-    target.classList.remove('prev');
-    target.classList.add('active');
 }
 
 // Run init
